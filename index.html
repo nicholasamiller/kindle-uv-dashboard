@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>UV Index Display</title>
@@ -13,7 +14,7 @@
             xhr.open("GET", "https://uvdata.arpansa.gov.au/xml/uvvalues.xml", true);
 
             // Event handler for request success
-            xhr.onload = function() {
+            xhr.onload = function () {
                 if (xhr.status >= 200 && xhr.status < 300) {
                     // Parse XML response
                     var parser = new DOMParser();
@@ -47,24 +48,39 @@
     </script>
     <style>
         /* Styles to make the index value fill the whole screen */
-        body, html {
-            height: 75%;
+        body,
+        html {
             margin: 0;
+            padding: 0;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            font-size: 5rem;
+            font-size: 4rem;
         }
-         #message {
+
+        #message {
             font-size: 2rem;
             text-align: center;
         }
+
+        #container {
+            width: 600px;
+            height: 800px;
+            margin: auto;
+            /* Centers the container */
+            overflow: hidden;
+            /* Optional, to handle overflow */
+            border: 5px solid black;
+        }
     </style>
 </head>
+
 <body>
-    <div id="indexValue"></div>
-    
-      <div id="message"></div>
+    <div id="container">
+        <div id="indexValue"/>
+        <div id="message"/>
+    </div>
 </body>
+
 </html>

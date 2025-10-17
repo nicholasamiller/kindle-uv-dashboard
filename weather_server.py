@@ -8,6 +8,9 @@ CORS(app)  # Enable CORS for all routes
 
 BOM_URL = "https://www.bom.gov.au/fwo/IDN60801/IDN60801.94926.json"
 UV_URL = "https://uvdata.arpansa.gov.au/xml/uvvalues.xml"
+USER_AGENT = "WeatherServer/1.0"
+REQUEST_HEADERS = {"User-Agent": USER_AGENT}
+
 
 def get_uv_data():
     """Fetch UV index for Canberra"""
@@ -34,7 +37,7 @@ def get_weather_data():
     """Fetch weather data from BOM"""
     try:
         print(f"Fetching weather data from {BOM_URL}")
-        response = requests.get(BOM_URL, timeout=10)
+        response = requests.get(BOM_URL, headers=REQUEST_HEADERS, timeout=10)
         response.raise_for_status()
         print(f"Response status: {response.status_code}")
         

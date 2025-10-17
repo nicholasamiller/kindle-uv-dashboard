@@ -164,7 +164,7 @@ def index():
             justify-content: center;
             align-items: center;
             font-family: Arial, sans-serif;
-            font-size: 6rem;
+            font-size: 1rem;
             font-weight: bold;
             background-color: white;
             color: black;
@@ -177,18 +177,17 @@ def index():
             height: 100%;
             display: flex;
             flex-direction: column;
-            justify-content: center;
+            justify-content: space-around; /* Distribute items evenly */
             align-items: center;
             text-align: center;
             overflow: hidden; /* Prevent scrolling */
-            padding: 5px;
+            padding: 20px 5px; /* Add some vertical padding */
             box-sizing: border-box;
         }
 
         #indexValue {
             font-size: 3rem;
             font-weight: bold;
-            margin-bottom: 10px;
             line-height: 1.0;
             flex-shrink: 0;
         }
@@ -196,7 +195,6 @@ def index():
         #message {
             font-size: 1.2rem;
             text-align: center;
-            margin-top: 5px;
             line-height: 1.2;
             max-width: 95%;
             word-wrap: break-word;
@@ -210,7 +208,6 @@ def index():
         #temperature {
             font-size: 1.5rem;
             text-align: center;
-            margin-top: 10px;
             line-height: 1.2;
             color: black;
             font-weight: bold;
@@ -220,7 +217,6 @@ def index():
         #feels {
             font-size: 1.2rem;
             text-align: center;
-            margin-top: 4px;
             line-height: 1.1;
             color: black;
             font-weight: bold;
@@ -230,7 +226,6 @@ def index():
         #wind {
             font-size: 1.1rem;
             text-align: center;
-            margin-top: 3px;
             line-height: 1.1;
             color: black;
             font-weight: bold;
@@ -238,25 +233,15 @@ def index():
 
         /* Kindle-specific optimizations for 600x800 portrait mode */
         @media screen and (max-width: 600px) and (orientation: portrait) {
-            body, html {
-                padding: 5px;
-            }
-            #container {
-                justify-content: flex-start; /* Align items to the top */
-                padding-top: 20px;
-            }
             #indexValue {
                 font-size: 5rem;  /* 80px */
-                margin-bottom: 25px;
             }
             #message {
                 font-size: 2.5rem; /* 40px */
-                margin-bottom: 40px;
             }
-            #temperature, #feels, #wind {
+            #temperature, #feels {
                 font-size: 2rem; /* 32px */
                 line-height: 1.4;
-                margin-top: 15px;
             }
             #wind {
                 font-size: 1.6rem; /* Make it smaller still */

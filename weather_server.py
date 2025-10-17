@@ -64,7 +64,6 @@ def get_weather_data():
                     'gust_kmh': observation.get('gust_kmh'),
                     'wind_spd_kmh': observation.get('wind_spd_kmh')
                 }
-                print(f"Found latest observation: {weather_data}")
                 return weather_data
         
         print("No observation with sort_order=0 found")
@@ -95,16 +94,47 @@ def index():
         if uv_index == 0:
             uv_message = ""
         elif uv_index < 2:
-            uv_message = "sun OK"
+            uv_message = "Play outside kids!"
         elif uv_index < 7:
-            uv_message = "cover up"
+            uv_message = "Cover up kids!"
         else:
-            uv_message = "stay inside"
+            uv_message = "Stay inside kids!"
     
     # Format display values
     uv_display = f"UV {uv_index}" if uv_index is not None else "UV --"
-    temp_display = f"{weather['air_temp']}°C" if weather and weather['air_temp'] is not None else "--"
-    
+    # Show temperature and relative humidity on the same line (e.g. "21°C RH 45%")
+    if weather:
+        temp_part = f"{weather.get('air_temp')}°C" if weather.get('air_temp') is not None else "--"
+        rh = weather.get('rel_hum')
+        rh_part = f" RH {int(rh)}%" if rh is not None else ""
+        temp_display = f"{temp_part}{rh_part}"
+        # Apparent temperature (separate line)
+        if weather.get('apparent_t') is not None:
+            try:
+                feels_display = f"Feels like {int(weather.get('apparent_t'))}°C"
+            except (ValueError, TypeError):
+                feels_display = f"Feels like {weather.get('apparent_t')}°C"
+        else:
+            feels_display = ""
+        # Wind display (separate line)
+        wind_spd = weather.get('wind_spd_kmh')
+        gust = weather.get('gust_kmh')
+        if wind_spd is not None and gust is not None:
+            try:
+                wind_display = f"Wind {int(wind_spd)} to {int(gust)} km/h"
+            except (ValueError, TypeError):
+                wind_display = f"Wind {wind_spd} to {gust} km/h"
+        elif wind_spd is not None:
+            wind_display = f"Wind {int(wind_spd)} km/h" if isinstance(wind_spd, (int, float)) else f"Wind {wind_spd} km/h"
+        elif gust is not None:
+            wind_display = f"Wind up to {int(gust)} km/h" if isinstance(gust, (int, float)) else f"Wind up to {gust} km/h"
+        else:
+            wind_display = ""
+    else:
+        temp_display = "--"
+        feels_display = ""
+        wind_display = ""
+
     html_template = """
 <!DOCTYPE html>
 <html lang="en">
@@ -186,6 +216,53 @@ def index():
             font-weight: bold;
         }
 
+        /* New line for apparent temperature */
+        #feels {
+            font-size: 1.2rem;
+            text-align: center;
+            margin-top: 4px;
+            line-height: 1.1;
+            color: black;
+            font-weight: bold;
+        }
+
+        /* New line for wind */
+        #wind {
+            font-size: 1.1rem;
+            text-align: center;
+            margin-top: 3px;
+            line-height: 1.1;
+            color: black;
+            font-weight: bold;
+        }
+
+        /* Kindle-specific optimizations for 600x800 portrait mode */
+        @media screen and (max-width: 600px) and (orientation: portrait) {
+            body, html {
+                padding: 5px;
+            }
+            #container {
+                justify-content: flex-start; /* Align items to the top */
+                padding-top: 20px;
+            }
+            #indexValue {
+                font-size: 5rem;  /* 80px */
+                margin-bottom: 25px;
+            }
+            #message {
+                font-size: 2.5rem; /* 40px */
+                margin-bottom: 40px;
+            }
+            #temperature, #feels, #wind {
+                font-size: 2rem; /* 32px */
+                line-height: 1.4;
+                margin-top: 15px;
+            }
+            #wind {
+                font-size: 1.6rem; /* Make it smaller still */
+            }
+        }
+
         /* Kindle-specific optimizations */
         @media screen and (max-width: 1024px) {
             body, html {
@@ -201,6 +278,12 @@ def index():
             #temperature {
                 font-size: 1.1rem;
             }
+            #feels {
+                font-size: 0.95rem;
+            }
+            #wind {
+                font-size: 0.9rem;
+            }
         }
 
         @media screen and (max-height: 600px) {
@@ -215,6 +298,12 @@ def index():
             #temperature {
                 font-size: 1rem;
             }
+            #feels {
+                font-size: 0.9rem;
+            }
+            #wind {
+                font-size: 0.85rem;
+            }
         }
 
         @media screen and (max-height: 480px) {
@@ -227,6 +316,12 @@ def index():
             #temperature {
                 font-size: 0.9rem;
             }
+            #feels {
+                font-size: 0.8rem;
+            }
+            #wind {
+                font-size: 0.75rem;
+            }
         }
     </style>
 </head>
@@ -236,17 +331,21 @@ def index():
         <div id="indexValue">{{ uv_display }}</div>
         <div id="message">{{ uv_message }}</div>
         <div id="temperature">{{ temp_display }}</div>
+        <div id="feels">{{ feels_display }}</div>
+        <div id="wind">{{ wind_display }}</div>
     </div>
 </body>
 
 </html>
     """
-    
+
     return render_template_string(
         html_template,
         uv_display=uv_display,
         uv_message=uv_message,
-        temp_display=temp_display
+        temp_display=temp_display,
+        feels_display=feels_display,
+        wind_display=wind_display
     )
 
 @app.route('/weather', methods=['GET'])

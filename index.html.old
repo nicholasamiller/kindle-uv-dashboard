@@ -26,7 +26,7 @@
                     var indexValue = xmlDoc.querySelector('location[id="Canberra"] > index').textContent;
 
                     // Update the index value on the screen
-                    document.getElementById("indexValue").innerHTML = indexValue;
+                    document.getElementById("indexValue").innerHTML = "UV " + indexValue;
 
                     var message = "";
                     if (indexValue == 0) {
@@ -52,8 +52,18 @@
             xhr.send();
         }
 
+        // Function to update weather display
+        function updateWeatherDisplay() {
+            fetchWeatherData(function(weatherData) {
+                if (weatherData && weatherData.air_temp !== null) {
+                    document.getElementById("temperature").innerHTML = weatherData.air_temp + "°C";
+                }
+            });
+        }
+
         // Fetch and update on page load
         fetchAndUpdate();
+        updateWeatherDisplay();
 
         // Add a test message to verify the message div is working
         document.addEventListener('DOMContentLoaded', function() {
@@ -65,6 +75,45 @@
 
         // Update every 1 minute
         setInterval(fetchAndUpdate, 60000);
+        setInterval(updateWeatherDisplay, 60000);
+
+        // Function to fetch weather data from local server
+        function fetchWeatherData(callback) {
+            // Create a new XMLHttpRequest object
+            var xhr = new XMLHttpRequest();
+
+            // Configure the request - point to your local server
+            // Replace 'localhost' with your server's IP address if accessing from Kindle
+            var apiUrl = "http://localhost:5000/weather";
+            xhr.open("GET", apiUrl, true);
+
+            // Event handler for request success
+            xhr.onload = function () {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    try {
+                        // Parse the response
+                        var weatherData = JSON.parse(xhr.responseText);
+                        
+                        if (callback) callback(weatherData);
+                    } catch (error) {
+                        console.error('Error parsing weather data:', error);
+                        if (callback) callback(null);
+                    }
+                } else {
+                    console.error('Network response was not ok');
+                    if (callback) callback(null);
+                }
+            };
+
+            // Event handler for request error
+            xhr.onerror = function () {
+                console.error('Error fetching weather data');
+                if (callback) callback(null);
+            };
+
+            // Send the request
+            xhr.send();
+        }
     </script>
     <style>
         /* Optimized styles for Kindle experimental browser full-screen display */
@@ -122,6 +171,15 @@
             overflow: hidden;
         }
 
+        #temperature {
+            font-size: 1.5rem;
+            text-align: center;
+            margin-top: 10px;
+            line-height: 1.2;
+            color: black;
+            font-weight: bold;
+        }
+
         /* Kindle-specific optimizations */
         @media screen and (max-width: 1024px) {
             body, html {
@@ -134,6 +192,9 @@
             #message {
                 font-size: 1rem;
             }
+            #temperature {
+                font-size: 1.1rem;
+            }
         }
 
         @media screen and (max-height: 600px) {
@@ -145,6 +206,9 @@
                 font-size: 0.9rem;
                 margin-top: 3px;
             }
+            #temperature {
+                font-size: 1rem;
+            }
         }
 
         @media screen and (max-height: 480px) {
@@ -154,6 +218,9 @@
             #message {
                 font-size: 0.8rem;
             }
+            #temperature {
+                font-size: 0.9rem;
+            }
         }
     </style>
 </head>
@@ -162,6 +229,7 @@
     <div id="container">
         <div id="indexValue"></div>
         <div id="message"></div>
+        <div id="temperature"></div>
     </div>
 </body>
 

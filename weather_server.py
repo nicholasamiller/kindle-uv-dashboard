@@ -164,7 +164,7 @@ def index():
             justify-content: center;
             align-items: center;
             font-family: Arial, sans-serif;
-            font-size: 1rem;
+            font-size: 3rem;
             font-weight: bold;
             background-color: white;
             color: black;

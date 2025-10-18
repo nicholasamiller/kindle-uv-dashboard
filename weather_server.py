@@ -2,6 +2,8 @@ from flask import Flask, jsonify, render_template_string
 from flask_cors import CORS
 import requests
 import xml.etree.ElementTree as ET
+from sunspec2.modbus.client import SunSpecModbusClientDeviceTCP
+from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -87,7 +89,11 @@ def index():
     
     # Fetch weather data
     weather = get_weather_data()
-    
+
+    # Fetch solar data
+    site_power_watts = get_solar_data()
+    cost_per_hour = calculate_power_cost(site_power_watts)
+
     # Determine UV message
     uv_message = ""
     if uv_index is not None:
@@ -102,6 +108,19 @@ def index():
     
     # Format display values
     uv_display = f"UV {uv_index}" if uv_index is not None else "UV --"
+
+    # Site Power and Cost
+    if site_power_watts is not None:
+        site_power_kw = site_power_watts / 1000.0
+        site_power_display = f"Site Power {site_power_kw:.2f} KW"
+    else:
+        site_power_display = "Site Power -- KW"
+
+    if cost_per_hour is not None:
+        cost_display = f"Cost ${cost_per_hour:.2f}"
+    else:
+        cost_display = "Cost $--"
+
     # Show temperature and relative humidity on the same line (e.g. "21°C RH 45%")
     if weather:
         temp_part = f"{weather.get('air_temp')}°C" if weather.get('air_temp') is not None else "--"
@@ -231,6 +250,14 @@ def index():
             font-weight: bold;
         }
 
+        #site_power, #cost {
+            font-size: 1.1rem;
+            text-align: center;
+            line-height: 1.1;
+            color: black;
+            font-weight: bold;
+        }
+
         /* Kindle-specific optimizations for 600x800 portrait mode */
         @media screen and (max-width: 600px) and (orientation: portrait) {
             #indexValue {
@@ -243,7 +270,7 @@ def index():
                 font-size: 2rem; /* 32px */
                 line-height: 1.4;
             }
-            #wind {
+            #wind, #site_power, #cost {
                 font-size: 1.6rem; /* Make it smaller still */
             }
         }
@@ -266,7 +293,7 @@ def index():
             #feels {
                 font-size: 0.95rem;
             }
-            #wind {
+            #wind, #site_power, #cost {
                 font-size: 0.9rem;
             }
         }
@@ -286,7 +313,7 @@ def index():
             #feels {
                 font-size: 0.9rem;
             }
-            #wind {
+            #wind, #site_power, #cost {
                 font-size: 0.85rem;
             }
         }
@@ -304,7 +331,7 @@ def index():
             #feels {
                 font-size: 0.8rem;
             }
-            #wind {
+            #wind, #site_power, #cost {
                 font-size: 0.75rem;
             }
         }
@@ -318,6 +345,8 @@ def index():
         <div id="temperature">{{ temp_display }}</div>
         <div id="feels">{{ feels_display }}</div>
         <div id="wind">{{ wind_display }}</div>
+        <div id="site_power">{{ site_power_display }}</div>
+        <div id="cost">{{ cost_display }} per hour</div>
     </div>
 </body>
 
@@ -330,7 +359,9 @@ def index():
         uv_message=uv_message,
         temp_display=temp_display,
         feels_display=feels_display,
-        wind_display=wind_display
+        wind_display=wind_display,
+        site_power_display=site_power_display,
+        cost_display=cost_display
     )
 
 @app.route('/weather', methods=['GET'])
@@ -356,6 +387,93 @@ def get_uv():
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({'status': 'ok'})
+
+def calculate_power_cost(site_power_watts):
+    """Calculates the current cost of power per hour based on site power and time."""
+    if site_power_watts is None:
+        return None
+
+    now = datetime.now()
+    hour = now.hour
+
+    # Tariffs in $/kWh
+    feed_in_tariff = 0.065
+    peak_tariff = 0.3900
+    off_peak_tariff = 15.40 / 100 # 15.40c
+    shoulder_tariff = 27.56 / 100 # 27.56c
+
+    # Convert site power from W to kW
+    site_power_kw = site_power_watts / 1000.0
+
+    # When site power is positive, we are exporting (credit)
+    if site_power_kw > 0:
+        # Return as a negative cost (credit)
+        return round(- (site_power_kw * feed_in_tariff), 2)
+
+    # When site power is negative, we are importing (cost)
+    # Use absolute power for cost calculation
+    power_usage_kw = abs(site_power_kw)
+
+    # Determine the correct tariff based on the time of day
+    # Peak time: 7am-9am (7-8) and 5pm-9pm (17-20)
+    if (7 <= hour < 9) or (17 <= hour < 21):
+        return round(power_usage_kw * peak_tariff, 2)
+    # Off-peak time: 11am-3pm (11-14)
+    elif 11 <= hour < 15:
+        return round(power_usage_kw * off_peak_tariff, 2)
+    # Shoulder time (all other times)
+    else:
+        return round(power_usage_kw * shoulder_tariff, 2)
+
+def get_solar_data():
+    """Fetch solar inverter data"""
+    try:
+        dev = SunSpecModbusClientDeviceTCP(slave_id=1, ipaddr="192.168.1.37", ipport=1502, timeout=5)
+        dev.scan()
+
+        def first_block(models, mid):
+            mlist = models.get(mid) or []
+            m = mlist[0] if isinstance(mlist, list) and mlist else None
+            if isinstance(m, list):  # some stacks nest a list of blocks
+                m = m[0]
+            return m
+
+        meter = first_block(dev.models, 203)   # 3-phase AC meter
+
+        site_power = None
+        if meter and meter.points["W"].value is not None:
+            site_power = meter.points["W"].value
+
+        dev.close()
+        return site_power
+    except Exception as e:
+        print(f"Error fetching solar data: {e}")
+        return None
+
+@app.route('/solar', methods=['GET'])
+def get_solar():
+    """API endpoint for solar data"""
+    site_power = get_solar_data()
+    if site_power is None:
+        return jsonify({'error': 'Could not fetch site power'}), 500
+    return jsonify({'site_power': site_power})
+
+@app.route('/power/cost', methods=['GET'])
+def get_power_cost():
+    """API endpoint for the current cost of power."""
+    site_power = get_solar_data()
+    if site_power is None:
+        return jsonify({'error': 'Could not fetch site power'}), 500
+
+    cost_per_hour = calculate_power_cost(site_power)
+
+    if cost_per_hour is None:
+        return jsonify({'error': 'Could not calculate power cost'}), 500
+
+    return jsonify({
+        'site_power_watts': site_power,
+        'cost_per_hour': cost_per_hour
+    })
 
 if __name__ == '__main__':
     # Run on all interfaces so it's accessible from your network

@@ -150,9 +150,10 @@ def plot_bw_chart(times: List[dt.datetime], measured: List[Optional[float]], for
     ax.set_xlim(start_dt, end_dt)
     ax.set_ylim(0, 16)
 
-    ax.set_xlabel("Time of day")
-    ax.set_ylabel("Solar UV index")
-    ax.set_title(f"UV Index {date_str}")
+    # ax.set_xlabel("Time of day")
+    # ax.set_ylabel("Solar UV index")
+    # Removed title for Kindle-friendly minimalist display
+    # ax.set_title(f"UV Index {date_str}")
 
     # Time ticks every hour, formatted HH:MM
     ax.xaxis.set_major_locator(mdates.HourLocator(interval=1))
@@ -160,13 +161,14 @@ def plot_bw_chart(times: List[dt.datetime], measured: List[Optional[float]], for
     # Minor ticks every 30 minutes for readability
     ax.xaxis.set_minor_locator(mdates.MinuteLocator(byminute=[0, 30]))
 
-    ax.grid(True, which="major", linewidth=0.6, alpha=0.4)
-    ax.grid(True, which="minor", linewidth=0.3, alpha=0.2)
+    # Removed grid lines
+    # ax.grid(True, which="major", linewidth=0.6, alpha=0.4)
+    # ax.grid(True, which="minor", linewidth=0.3, alpha=0.2)
 
-    # Legend in black border
-    leg = ax.legend(frameon=True, edgecolor="black")
-    for lh in leg.legend_handles:
-        lh.set_linewidth(2.0)
+    # Removed legend/key
+    # leg = ax.legend(frameon=True, edgecolor="black")
+    # for lh in leg.legend_handles:
+    #     lh.set_linewidth(2.0)
 
     fig.autofmt_xdate(rotation=0)
     plt.tight_layout()

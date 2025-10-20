@@ -5,7 +5,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY weather_server.py .
+# Include both server and chart generator
+COPY weather_server.py chart.py .
 
 EXPOSE 5000
 

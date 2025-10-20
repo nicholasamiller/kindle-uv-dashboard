@@ -1,0 +1,14 @@
+version: "3.9"
+
+services:
+  kindle-uv-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kindle-uv-dashboard
+    ports:
+      - "5000:5000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+

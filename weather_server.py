@@ -126,7 +126,7 @@ def index():
         site_power_kw = site_power_watts / 1000.0
         site_power_display = f"{site_power_kw:.2f} kw"  # per requirement text
     else:
-        site_power_display = "-- kwh"
+        site_power_display = "-- kw"
 
     if cost_per_hour is not None:
         cost_display = f"${cost_per_hour:.2f}"
@@ -251,10 +251,8 @@ def index():
             flex-shrink: 1;
         }
         #uv_chart {
-            width: 95%;
-            max-width: 580px; /* fit within Kindle width */
-            height: auto;
-            max-height: 42vh; /* keep entire page in one screen */
+            width: 550px;   /* fixed width to avoid reflow */
+            height: 344px;  /* maintain 8:5 aspect ratio (1200x750 scaled) */
             border: 0;
         }
 
@@ -295,52 +293,28 @@ def index():
             #wind, #power_cost {
                 font-size: 1.4rem;
             }
-            #uv_chart {
-                max-width: 560px;
-                max-height: 40vh;
-            }
+            /* keep chart fixed size to prevent reflow */
+            #uv_chart { width: 550px; height: 344px; }
         }
 
         /* Kindle-specific optimizations */
         @media screen and (max-width: 1024px) {
-            body, html {
-                padding: 3px;
-            }
-            #indexValue {
-                font-size: 10vw;
-                margin-bottom: 6px;
-            }
-            #temperature {
-                font-size: 1.1rem;
-            }
-            #wind, #power_cost {
-                font-size: 0.9rem;
-            }
+            body, html { padding: 3px; }
+            #indexValue { font-size: 10vw; margin-bottom: 6px; }
+            #temperature { font-size: 1.1rem; }
+            #wind, #power_cost { font-size: 0.9rem; }
         }
 
         @media screen and (max-height: 600px) {
-            #indexValue {
-                font-size: 9vw;
-                margin-bottom: 5px;
-            }
-            #temperature {
-                font-size: 1rem;
-            }
-            #wind, #power_cost {
-                font-size: 0.85rem;
-            }
+            #indexValue { font-size: 9vw; margin-bottom: 5px; }
+            #temperature { font-size: 1rem; }
+            #wind, #power_cost { font-size: 0.85rem; }
         }
 
         @media screen and (max-height: 480px) {
-            #indexValue {
-                font-size: 8vw;
-            }
-            #temperature {
-                font-size: 0.9rem;
-            }
-            #wind, #power_cost {
-                font-size: 0.75rem;
-            }
+            #indexValue { font-size: 8vw; }
+            #temperature { font-size: 0.9rem; }
+            #wind, #power_cost { font-size: 0.75rem; }
         }
     </style>
 </head>
@@ -348,7 +322,7 @@ def index():
 <body>
     <div id="container">
         <div id="indexValue">{{ uv_display }}</div>
-        <div id="chartRow"><img id="uv_chart" src="{{ chart_url }}" alt="UV chart for the day" /></div>
+        <div id="chartRow"><img id="uv_chart" src="{{ chart_url }}" alt="UV chart for the day" width="550" height="344" /></div>
         <div id="temperature">{{ temp_display }}</div>
         <div id="wind">{{ wind_display }}</div>
         <div id="power_cost">{{ power_cost_display }}</div>

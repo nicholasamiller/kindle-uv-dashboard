@@ -139,9 +139,9 @@ def plot_bw_chart(times: List[dt.datetime], measured: List[Optional[float]], for
     fig, ax = plt.subplots(figsize=(fig_w_inches, fig_h_inches), dpi=dpi)
 
     # Plot lines in black; measured solid, forecast dotted
-    ax.plot(times, measured, color="black", linewidth=1.8, linestyle="-", label="Measured", solid_capstyle="round")
+    ax.plot(times, measured, color="black", linewidth=6.0, linestyle="-", label="Measured", solid_capstyle="round")
     # Dotted with round caps; custom dash pattern ensures visibility in grayscale
-    ax.plot(times, forecast, color="black", linewidth=1.6, linestyle=(0, (2, 4)), label="Forecast", solid_capstyle="butt")
+    ax.plot(times, forecast, color="black", linewidth=5.0, linestyle=(0, (2, 4)), label="Forecast", solid_capstyle="butt")
 
     # Limits and ticks
     base_date = dt.datetime.strptime(date_str, "%Y-%m-%d").date()
@@ -209,8 +209,8 @@ def generate_chart_bytes(date_str: str,
     dpi = 150
     fig, ax = plt.subplots(figsize=(fig_w_inches, fig_h_inches), dpi=dpi)
 
-    ax.plot(times, measured, color="black", linewidth=1.8, linestyle="-", label="Measured", solid_capstyle="round")
-    ax.plot(times, forecast, color="black", linewidth=1.6, linestyle=(0, (2, 4)), label="Forecast", solid_capstyle="butt")
+    ax.plot(times, measured, color="black", linewidth=6.0, linestyle="-", label="Measured", solid_capstyle="round")
+    ax.plot(times, forecast, color="black", linewidth=5.0, linestyle=(0, (2, 4)), label="Forecast", solid_capstyle="butt")
 
     base_date = dt.datetime.strptime(date_str, "%Y-%m-%d").date()
     start_dt = dt.datetime.combine(base_date, dt.time(5, 30))

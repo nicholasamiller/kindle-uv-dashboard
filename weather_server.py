@@ -124,7 +124,7 @@ def index():
     # Site Power and Cost (combined line)
     if site_power_watts is not None:
         site_power_kw = site_power_watts / 1000.0
-        site_power_display = f"{site_power_kw:.2f} kwh"  # per requirement text
+        site_power_display = f"{site_power_kw:.2f} kw"  # per requirement text
     else:
         site_power_display = "-- kwh"
 

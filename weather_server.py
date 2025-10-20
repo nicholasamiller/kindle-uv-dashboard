@@ -101,7 +101,7 @@ def index():
     site_power_watts = get_solar_data()
     cost_per_hour = calculate_power_cost(site_power_watts)
 
-    # Determine UV message
+    # Determine UV message (no longer displayed)
     uv_message = ""
     if uv_index is not None:
         if uv_index == 0:
@@ -121,32 +121,48 @@ def index():
     ts = datetime.now().strftime('%H%M')
     chart_url = f"/uv/chart?date={date_str}&ts={ts}"
 
-    # Site Power and Cost
+    # Site Power and Cost (combined line)
     if site_power_watts is not None:
         site_power_kw = site_power_watts / 1000.0
-        site_power_display = f"Site Power {site_power_kw:.2f} KW"
+        site_power_display = f"{site_power_kw:.2f} kwh"  # per requirement text
     else:
-        site_power_display = "Site Power -- KW"
+        site_power_display = "-- kwh"
 
     if cost_per_hour is not None:
-        cost_display = f"Cost ${cost_per_hour:.2f}"
+        cost_display = f"${cost_per_hour:.2f}"
     else:
-        cost_display = "Cost $--"
+        cost_display = "$--"
 
-    # Show temperature and relative humidity on the same line (e.g. "21°C RH 45%")
+    power_cost_display = f"Power {site_power_display}, Cost {cost_display} ph."
+
+    # Temperature, humidity, and apparent temperature on one line
     if weather:
-        temp_part = f"{weather.get('air_temp')}°C" if weather.get('air_temp') is not None else "--"
-        rh = weather.get('rel_hum')
-        rh_part = f" RH {int(rh)}%" if rh is not None else ""
-        temp_display = f"{temp_part}{rh_part}"
-        # Apparent temperature (separate line)
-        if weather.get('apparent_t') is not None:
+        parts = []
+        air_temp = weather.get('air_temp')
+        if air_temp is not None:
             try:
-                feels_display = f"Feels like {int(weather.get('apparent_t'))}°C"
-            except (ValueError, TypeError):
-                feels_display = f"Feels like {weather.get('apparent_t')}°C"
+                parts.append(f"{int(round(float(air_temp)))}°C")
+            except Exception:
+                parts.append(f"{air_temp}°C")
         else:
-            feels_display = ""
+            parts.append("--")
+
+        rh = weather.get('rel_hum')
+        if rh is not None:
+            try:
+                parts.append(f"RH {int(round(float(rh)))}%")
+            except Exception:
+                parts.append(f"RH {rh}%")
+
+        apparent = weather.get('apparent_t')
+        if apparent is not None:
+            try:
+                parts.append(f"AT {int(round(float(apparent)))}°C")
+            except Exception:
+                parts.append(f"AT {apparent}°C")
+
+        temp_display = ", ".join(parts) + "."
+
         # Wind display (separate line)
         wind_spd = weather.get('wind_spd_kmh')
         gust = weather.get('gust_kmh')
@@ -163,7 +179,6 @@ def index():
             wind_display = ""
     else:
         temp_display = "--"
-        feels_display = ""
         wind_display = ""
 
     html_template = """
@@ -240,19 +255,6 @@ def index():
             border: 0;
         }
 
-        #message {
-            font-size: 1.2rem;
-            text-align: center;
-            line-height: 1.2;
-            max-width: 95%;
-            word-wrap: break-word;
-            display: block;
-            color: black;
-            font-weight: bold;
-            flex-shrink: 1;
-            overflow: hidden;
-        }
-
         #temperature {
             font-size: 1.5rem;
             text-align: center;
@@ -261,16 +263,7 @@ def index():
             font-weight: bold;
         }
 
-        /* New line for apparent temperature */
-        #feels {
-            font-size: 1.2rem;
-            text-align: center;
-            line-height: 1.1;
-            color: black;
-            font-weight: bold;
-        }
-
-        /* New line for wind */
+        /* Wind */
         #wind {
             font-size: 1.1rem;
             text-align: center;
@@ -279,7 +272,7 @@ def index():
             font-weight: bold;
         }
 
-        #site_power, #cost {
+        #power_cost {
             font-size: 1.1rem;
             text-align: center;
             line-height: 1.1;
@@ -292,14 +285,11 @@ def index():
             #indexValue {
                 font-size: 5rem;  /* 80px */
             }
-            #message {
-                font-size: 2.2rem; /* slightly smaller to fit with chart */
-            }
-            #temperature, #feels {
+            #temperature {
                 font-size: 1.8rem; /* tighten a bit */
                 line-height: 1.3;
             }
-            #wind, #site_power, #cost {
+            #wind, #power_cost {
                 font-size: 1.4rem;
             }
             #uv_chart {
@@ -317,16 +307,10 @@ def index():
                 font-size: 2.5rem;
                 margin-bottom: 6px;
             }
-            #message {
-                font-size: 1rem;
-            }
             #temperature {
                 font-size: 1.1rem;
             }
-            #feels {
-                font-size: 0.95rem;
-            }
-            #wind, #site_power, #cost {
+            #wind, #power_cost {
                 font-size: 0.9rem;
             }
         }
@@ -336,17 +320,10 @@ def index():
                 font-size: 2rem;
                 margin-bottom: 5px;
             }
-            #message {
-                font-size: 0.9rem;
-                margin-top: 3px;
-            }
             #temperature {
                 font-size: 1rem;
             }
-            #feels {
-                font-size: 0.9rem;
-            }
-            #wind, #site_power, #cost {
+            #wind, #power_cost {
                 font-size: 0.85rem;
             }
         }
@@ -355,16 +332,10 @@ def index():
             #indexValue {
                 font-size: 1.8rem;
             }
-            #message {
-                font-size: 0.8rem;
-            }
             #temperature {
                 font-size: 0.9rem;
             }
-            #feels {
-                font-size: 0.8rem;
-            }
-            #wind, #site_power, #cost {
+            #wind, #power_cost {
                 font-size: 0.75rem;
             }
         }
@@ -375,12 +346,9 @@ def index():
     <div id="container">
         <div id="indexValue">{{ uv_display }}</div>
         <div id="chartRow"><img id="uv_chart" src="{{ chart_url }}" alt="UV chart for the day" /></div>
-        <div id="message">{{ uv_message }}</div>
         <div id="temperature">{{ temp_display }}</div>
-        <div id="feels">{{ feels_display }}</div>
         <div id="wind">{{ wind_display }}</div>
-        <div id="site_power">{{ site_power_display }}</div>
-        <div id="cost">{{ cost_display }} per hour</div>
+        <div id="power_cost">{{ power_cost_display }}</div>
     </div>
 </body>
 
@@ -390,12 +358,9 @@ def index():
     return render_template_string(
         html_template,
         uv_display=uv_display,
-        uv_message=uv_message,
         temp_display=temp_display,
-        feels_display=feels_display,
         wind_display=wind_display,
-        site_power_display=site_power_display,
-        cost_display=cost_display,
+        power_cost_display=power_cost_display,
         chart_url=chart_url
     )
 

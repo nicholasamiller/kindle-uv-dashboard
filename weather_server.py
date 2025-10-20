@@ -232,9 +232,12 @@ def index():
         }
 
         #indexValue {
-            font-size: 3rem;
+            width: 100%;
+            font-size: 12vw; /* scale with viewport width for maximum visibility */
             font-weight: bold;
             line-height: 1.0;
+            margin: 0;
+            text-align: center;
             flex-shrink: 0;
         }
 
@@ -283,7 +286,7 @@ def index():
         /* Kindle-specific optimizations for 600x800 portrait mode */
         @media screen and (max-width: 600px) and (orientation: portrait) {
             #indexValue {
-                font-size: 5rem;  /* 80px */
+                font-size: 18vw; /* make the index fill more of the width on small portrait screens */
             }
             #temperature {
                 font-size: 1.8rem; /* tighten a bit */
@@ -304,7 +307,7 @@ def index():
                 padding: 3px;
             }
             #indexValue {
-                font-size: 2.5rem;
+                font-size: 10vw;
                 margin-bottom: 6px;
             }
             #temperature {
@@ -317,7 +320,7 @@ def index():
 
         @media screen and (max-height: 600px) {
             #indexValue {
-                font-size: 2rem;
+                font-size: 9vw;
                 margin-bottom: 5px;
             }
             #temperature {
@@ -330,7 +333,7 @@ def index():
 
         @media screen and (max-height: 480px) {
             #indexValue {
-                font-size: 1.8rem;
+                font-size: 8vw;
             }
             #temperature {
                 font-size: 0.9rem;

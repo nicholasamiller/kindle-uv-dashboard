@@ -1,9 +1,16 @@
-from flask import Flask, jsonify, render_template_string
+from flask import Flask, jsonify, render_template_string, Response, request
 from flask_cors import CORS
 import requests
 import xml.etree.ElementTree as ET
-from sunspec2.modbus.client import SunSpecModbusClientDeviceTCP
+# Safe import of SunSpec; degrade gracefully if unavailable
+try:
+    from sunspec2.modbus.client import SunSpecModbusClientDeviceTCP
+except Exception:
+    SunSpecModbusClientDeviceTCP = None
 from datetime import datetime
+
+# Import chart generator for UV image API
+from chart import generate_chart_bytes, DEFAULT_LON as UV_DEFAULT_LON, DEFAULT_LAT as UV_DEFAULT_LAT
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -109,6 +116,11 @@ def index():
     # Format display values
     uv_display = f"UV {uv_index}" if uv_index is not None else "UV --"
 
+    # Build chart URL (under UV reading). Add timestamp param to avoid stale cache.
+    date_str = datetime.now().strftime('%Y-%m-%d')
+    ts = datetime.now().strftime('%H%M')
+    chart_url = f"/uv/chart?date={date_str}&ts={ts}"
+
     # Site Power and Cost
     if site_power_watts is not None:
         site_power_kw = site_power_watts / 1000.0
@@ -211,6 +223,23 @@ def index():
             flex-shrink: 0;
         }
 
+        /* Chart row directly under the UV reading */
+        #chartRow {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 4px 0 8px 0; /* small spacing */
+            flex-shrink: 1;
+        }
+        #uv_chart {
+            width: 95%;
+            max-width: 580px; /* fit within Kindle width */
+            height: auto;
+            max-height: 42vh; /* keep entire page in one screen */
+            border: 0;
+        }
+
         #message {
             font-size: 1.2rem;
             text-align: center;
@@ -264,14 +293,18 @@ def index():
                 font-size: 5rem;  /* 80px */
             }
             #message {
-                font-size: 2.5rem; /* 40px */
+                font-size: 2.2rem; /* slightly smaller to fit with chart */
             }
             #temperature, #feels {
-                font-size: 2rem; /* 32px */
-                line-height: 1.4;
+                font-size: 1.8rem; /* tighten a bit */
+                line-height: 1.3;
             }
             #wind, #site_power, #cost {
-                font-size: 1.6rem; /* Make it smaller still */
+                font-size: 1.4rem;
+            }
+            #uv_chart {
+                max-width: 560px;
+                max-height: 40vh;
             }
         }
 
@@ -282,7 +315,7 @@ def index():
             }
             #indexValue {
                 font-size: 2.5rem;
-                margin-bottom: 8px;
+                margin-bottom: 6px;
             }
             #message {
                 font-size: 1rem;
@@ -341,6 +374,7 @@ def index():
 <body>
     <div id="container">
         <div id="indexValue">{{ uv_display }}</div>
+        <div id="chartRow"><img id="uv_chart" src="{{ chart_url }}" alt="UV chart for the day" /></div>
         <div id="message">{{ uv_message }}</div>
         <div id="temperature">{{ temp_display }}</div>
         <div id="feels">{{ feels_display }}</div>
@@ -361,7 +395,8 @@ def index():
         feels_display=feels_display,
         wind_display=wind_display,
         site_power_display=site_power_display,
-        cost_display=cost_display
+        cost_display=cost_display,
+        chart_url=chart_url
     )
 
 @app.route('/weather', methods=['GET'])
@@ -387,6 +422,44 @@ def get_uv():
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({'status': 'ok'})
+
+@app.route('/uv/chart', methods=['GET'])
+def get_uv_chart():
+    """Return the UV chart as a JPEG image.
+    Query params:
+      - date: YYYY-MM-DD (default: today)
+      - longitude: float (default from chart.DEFAULT_LON)
+      - latitude: float (default from chart.DEFAULT_LAT)
+      - use_sample: any truthy value to use embedded sample data
+    """
+    try:
+        date_str = request.args.get('date') or datetime.now().strftime('%Y-%m-%d')
+        try:
+            # Validate date format
+            datetime.strptime(date_str, '%Y-%m-%d')
+        except ValueError:
+            return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD.'}), 400
+
+        def _to_float(val, default):
+            try:
+                return float(val) if val is not None else default
+            except (TypeError, ValueError):
+                return default
+
+        lon = _to_float(request.args.get('longitude'), UV_DEFAULT_LON)
+        lat = _to_float(request.args.get('latitude'), UV_DEFAULT_LAT)
+        use_sample = request.args.get('use_sample') is not None and request.args.get('use_sample') not in ('0', 'false', 'False')
+
+        img_bytes = generate_chart_bytes(date_str=date_str, longitude=lon, latitude=lat, use_sample=use_sample)
+        headers = {
+            'Content-Type': 'image/jpeg',
+            'Cache-Control': 'no-store, max-age=0',
+            'Content-Disposition': f'inline; filename="uv_{date_str}.jpg"'
+        }
+        return Response(img_bytes, headers=headers)
+    except Exception as e:
+        print(f"Error generating UV chart: {e}")
+        return jsonify({'error': 'Failed to generate chart'}), 500
 
 def calculate_power_cost(site_power_watts):
     """Calculates the current cost of power per hour based on site power and time."""
@@ -428,6 +501,9 @@ def calculate_power_cost(site_power_watts):
 def get_solar_data():
     """Fetch solar inverter data"""
     try:
+        if SunSpecModbusClientDeviceTCP is None:
+            print("SunSpec library not available; skipping solar data fetch")
+            return None
         dev = SunSpecModbusClientDeviceTCP(slave_id=1, ipaddr="192.168.1.37", ipport=1502, timeout=5)
         dev.scan()
 

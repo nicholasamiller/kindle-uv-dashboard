@@ -182,6 +182,60 @@ def plot_bw_chart(times: List[dt.datetime], measured: List[Optional[float]], for
     img.save(output_path, format="JPEG", quality=95, optimize=True)
 
 
+def generate_chart_bytes(date_str: str,
+                         longitude: float = DEFAULT_LON,
+                         latitude: float = DEFAULT_LAT,
+                         timeout: int = 20,
+                         use_sample: bool = False) -> bytes:
+    """Generate the chart and return JPEG bytes for API consumption."""
+    graph_data = fetch_graph_data(date_str, lon=longitude, lat=latitude, timeout=timeout, use_sample=use_sample)
+    times, measured, forecast = parse_series(graph_data, date_str)
+
+    # Style and figure config as in plot_bw_chart (minimalist: no labels/title/grid/legend)
+    plt.rcParams.update({
+        "figure.facecolor": "white",
+        "axes.facecolor": "white",
+        "axes.edgecolor": "black",
+        "axes.labelcolor": "black",
+        "xtick.color": "black",
+        "ytick.color": "black",
+        "grid.color": "#888888",
+        "grid.linestyle": "-",
+        "text.color": "black",
+    })
+
+    fig_w_inches = 8.0
+    fig_h_inches = 5.0
+    dpi = 150
+    fig, ax = plt.subplots(figsize=(fig_w_inches, fig_h_inches), dpi=dpi)
+
+    ax.plot(times, measured, color="black", linewidth=1.8, linestyle="-", label="Measured", solid_capstyle="round")
+    ax.plot(times, forecast, color="black", linewidth=1.6, linestyle=(0, (2, 4)), label="Forecast", solid_capstyle="butt")
+
+    base_date = dt.datetime.strptime(date_str, "%Y-%m-%d").date()
+    start_dt = dt.datetime.combine(base_date, dt.time(5, 30))
+    end_dt = dt.datetime.combine(base_date, dt.time(19, 30))
+    ax.set_xlim(start_dt, end_dt)
+    ax.set_ylim(0, 16)
+
+    # No labels/title/grid/legend
+    ax.xaxis.set_major_locator(mdates.HourLocator(interval=1))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+    ax.xaxis.set_minor_locator(mdates.MinuteLocator(byminute=[0, 30]))
+
+    fig.autofmt_xdate(rotation=0)
+    plt.tight_layout()
+
+    out = BytesIO()
+    tmp = BytesIO()
+    fig.savefig(tmp, format="png", dpi=dpi)
+    plt.close(fig)
+    tmp.seek(0)
+    img = Image.open(tmp).convert("L")
+    img.save(out, format="JPEG", quality=95, optimize=True)
+    return out.getvalue()
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Generate black-and-white UV chart JPG from ARPANSA API")
     parser.add_argument("--date", default=dt.date.today().strftime("%Y-%m-%d"), help="Date in YYYY-MM-DD (default: today)")

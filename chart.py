@@ -138,6 +138,11 @@ def plot_bw_chart(times: List[dt.datetime], measured: List[Optional[float]], for
     dpi = 150  # 8x5 at 150dpi -> 1200x750 px, good for Kindle
     fig, ax = plt.subplots(figsize=(fig_w_inches, fig_h_inches), dpi=dpi)
 
+    # Thicker axis spines for distance visibility
+    for spine in ax.spines.values():
+        spine.set_linewidth(3.0)
+        spine.set_color("black")
+
     # Plot lines in black; measured solid, forecast dotted
     ax.plot(times, measured, color="black", linewidth=6.0, linestyle="-", label="Measured", solid_capstyle="round")
     # Dotted with round caps; custom dash pattern ensures visibility in grayscale
@@ -150,25 +155,18 @@ def plot_bw_chart(times: List[dt.datetime], measured: List[Optional[float]], for
     ax.set_xlim(start_dt, end_dt)
     ax.set_ylim(0, 16)
 
-    # ax.set_xlabel("Time of day")
-    # ax.set_ylabel("Solar UV index")
-    # Removed title for Kindle-friendly minimalist display
-    # ax.set_title(f"UV Index {date_str}")
-
-    # Time ticks every hour, formatted HH:MM
-    ax.xaxis.set_major_locator(mdates.HourLocator(interval=1))
+    # Time ticks every two hours, formatted HH:MM
+    ax.xaxis.set_major_locator(mdates.HourLocator(interval=2))
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
-    # Minor ticks every 30 minutes for readability
-    ax.xaxis.set_minor_locator(mdates.MinuteLocator(byminute=[0, 30]))
+    # Minor ticks every 1 hour for readability without label clutter
+    ax.xaxis.set_minor_locator(mdates.HourLocator(interval=1))
 
-    # Removed grid lines
-    # ax.grid(True, which="major", linewidth=0.6, alpha=0.4)
-    # ax.grid(True, which="minor", linewidth=0.3, alpha=0.2)
-
-    # Removed legend/key
-    # leg = ax.legend(frameon=True, edgecolor="black")
-    # for lh in leg.legend_handles:
-    #     lh.set_linewidth(2.0)
+    # Make tick marks thicker/longer and labels larger & bold
+    ax.tick_params(axis='both', which='major', labelsize=20, width=3.0, length=10, colors='black')
+    ax.tick_params(axis='both', which='minor', width=2.0, length=6, colors='black')
+    for lbl in ax.get_xticklabels() + ax.get_yticklabels():
+        lbl.set_fontweight('bold')
+        lbl.set_color('black')
 
     fig.autofmt_xdate(rotation=0)
     plt.tight_layout()
@@ -209,6 +207,11 @@ def generate_chart_bytes(date_str: str,
     dpi = 150
     fig, ax = plt.subplots(figsize=(fig_w_inches, fig_h_inches), dpi=dpi)
 
+    # Thicker axis spines for distance visibility
+    for spine in ax.spines.values():
+        spine.set_linewidth(3.0)
+        spine.set_color("black")
+
     ax.plot(times, measured, color="black", linewidth=6.0, linestyle="-", label="Measured", solid_capstyle="round")
     ax.plot(times, forecast, color="black", linewidth=5.0, linestyle=(0, (2, 4)), label="Forecast", solid_capstyle="butt")
 
@@ -219,9 +222,16 @@ def generate_chart_bytes(date_str: str,
     ax.set_ylim(0, 16)
 
     # No labels/title/grid/legend
-    ax.xaxis.set_major_locator(mdates.HourLocator(interval=1))
+    ax.xaxis.set_major_locator(mdates.HourLocator(interval=2))
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
-    ax.xaxis.set_minor_locator(mdates.MinuteLocator(byminute=[0, 30]))
+    ax.xaxis.set_minor_locator(mdates.HourLocator(interval=1))
+
+    # Make tick marks thicker/longer and labels larger & bold
+    ax.tick_params(axis='both', which='major', labelsize=20, width=3.0, length=10, colors='black')
+    ax.tick_params(axis='both', which='minor', width=2.0, length=6, colors='black')
+    for lbl in ax.get_xticklabels() + ax.get_yticklabels():
+        lbl.set_fontweight('bold')
+        lbl.set_color('black')
 
     fig.autofmt_xdate(rotation=0)
     plt.tight_layout()

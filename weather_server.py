@@ -8,12 +8,24 @@ try:
 except Exception:
     SunSpecModbusClientDeviceTCP = None
 from datetime import datetime
+import time  # for cache-busting timestamp
 
 # Import chart generator for UV image API
 from chart import generate_chart_bytes, DEFAULT_LON as UV_DEFAULT_LON, DEFAULT_LAT as UV_DEFAULT_LAT
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
+
+# Add global no-cache headers to reduce Kindle browser caching
+@app.after_request
+def add_no_cache_headers(resp: Response):
+    try:
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+    except Exception:
+        pass
+    return resp
 
 BOM_URL = "https://www.bom.gov.au/fwo/IDN60801/IDN60801.94926.json"
 UV_URL = "https://uvdata.arpansa.gov.au/xml/uvvalues.xml"
@@ -116,10 +128,10 @@ def index():
     # Format display values
     uv_display = f"UV {uv_index}" if uv_index is not None else "UV --"
 
-    # Build chart URL (under UV reading). Add timestamp param to avoid stale cache.
+    # Build chart URL (under UV reading). Use epoch-seconds in path to avoid stale cache.
     date_str = datetime.now().strftime('%Y-%m-%d')
-    ts = datetime.now().strftime('%H%M')
-    chart_url = f"/uv/chart?date={date_str}&ts={ts}"
+    ts = int(time.time())
+    chart_url = f"/uv/chart/{ts}?date={date_str}"
 
     # Site Power and Cost (combined line)
     if site_power_watts is not None:
@@ -190,6 +202,10 @@ def index():
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="format-detection" content="telephone=no">
     <meta http-equiv="refresh" content="60"> <!-- Refresh every minute -->
+    <!-- Strong no-cache hints for Kindle browser -->
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>UV Index Display</title>
     <script>
         // Simple refresh every minute
@@ -395,12 +411,49 @@ def get_uv_chart():
         img_bytes = generate_chart_bytes(date_str=date_str, longitude=lon, latitude=lat, use_sample=use_sample)
         headers = {
             'Content-Type': 'image/jpeg',
-            'Cache-Control': 'no-store, max-age=0',
+            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma': 'no-cache',
+            'Expires': '0',
             'Content-Disposition': f'inline; filename="uv_{date_str}.jpg"'
         }
         return Response(img_bytes, headers=headers)
     except Exception as e:
         print(f"Error generating UV chart: {e}")
+        return jsonify({'error': 'Failed to generate chart'}), 500
+
+# New path-based cache-busting route
+@app.route('/uv/chart/<ts>', methods=['GET'])
+def get_uv_chart_with_ts(ts: str):
+    """Return the UV chart with a timestamp in the path to defeat aggressive caches."""
+    try:
+        date_str = request.args.get('date') or datetime.now().strftime('%Y-%m-%d')
+        try:
+            # Validate date format
+            datetime.strptime(date_str, '%Y-%m-%d')
+        except ValueError:
+            return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD.'}), 400
+
+        def _to_float(val, default):
+            try:
+                return float(val) if val is not None else default
+            except (TypeError, ValueError):
+                return default
+
+        lon = _to_float(request.args.get('longitude'), UV_DEFAULT_LON)
+        lat = _to_float(request.args.get('latitude'), UV_DEFAULT_LAT)
+        use_sample = request.args.get('use_sample') is not None and request.args.get('use_sample') not in ('0', 'false', 'False')
+
+        img_bytes = generate_chart_bytes(date_str=date_str, longitude=lon, latitude=lat, use_sample=use_sample)
+        headers = {
+            'Content-Type': 'image/jpeg',
+            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+            'Content-Disposition': f'inline; filename="uv_{date_str}.jpg"'
+        }
+        return Response(img_bytes, headers=headers)
+    except Exception as e:
+        print(f"Error generating UV chart (ts route): {e}")
         return jsonify({'error': 'Failed to generate chart'}), 500
 
 def calculate_power_cost(site_power_watts):

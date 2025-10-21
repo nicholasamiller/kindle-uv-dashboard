@@ -8,3 +8,4 @@ PyYAML==6.0.3
 serial==0.0.97
 matplotlib==3.8.4
 pillow==10.4.0
+tzdata>=2024.1

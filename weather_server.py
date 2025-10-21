@@ -9,12 +9,20 @@ except Exception:
     SunSpecModbusClientDeviceTCP = None
 from datetime import datetime
 import time  # for cache-busting timestamp
+from zoneinfo import ZoneInfo  # timezone for AEDT/AEST
 
 # Import chart generator for UV image API
 from chart import generate_chart_bytes, DEFAULT_LON as UV_DEFAULT_LON, DEFAULT_LAT as UV_DEFAULT_LAT
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
+
+# Australia/Sydney timezone (handles AEST/AEDT automatically)
+AUS_TZ = ZoneInfo("Australia/Sydney")
+
+def today_au_date_str() -> str:
+    """Return today's date string (YYYY-MM-DD) in Australia/Sydney timezone (AEDT/AEST)."""
+    return datetime.now(AUS_TZ).strftime('%Y-%m-%d')
 
 # Add global no-cache headers to reduce Kindle browser caching
 @app.after_request
@@ -128,8 +136,8 @@ def index():
     # Format display values
     uv_display = f"UV {uv_index}" if uv_index is not None else "UV --"
 
-    # Build chart URL (under UV reading). Use epoch-seconds in path to avoid stale cache.
-    date_str = datetime.now().strftime('%Y-%m-%d')
+    # Build chart URL (under UV reading). Use epoch-seconds in path and AU date to avoid stale cache.
+    date_str = today_au_date_str()
     ts = int(time.time())
     chart_url = f"/uv/chart/{ts}?date={date_str}"
 
@@ -385,13 +393,14 @@ def health():
 def get_uv_chart():
     """Return the UV chart as a JPEG image.
     Query params:
-      - date: YYYY-MM-DD (default: today)
+      - date: YYYY-MM-DD (default: today in Australia/Sydney timezone)
       - longitude: float (default from chart.DEFAULT_LON)
       - latitude: float (default from chart.DEFAULT_LAT)
       - use_sample: any truthy value to use embedded sample data
     """
     try:
-        date_str = request.args.get('date') or datetime.now().strftime('%Y-%m-%d')
+        # Default to today's date in Australia/Sydney timezone
+        date_str = request.args.get('date') or today_au_date_str()
         try:
             # Validate date format
             datetime.strptime(date_str, '%Y-%m-%d')
@@ -411,6 +420,7 @@ def get_uv_chart():
         img_bytes = generate_chart_bytes(date_str=date_str, longitude=lon, latitude=lat, use_sample=use_sample)
         headers = {
             'Content-Type': 'image/jpeg',
+            # Strong no-cache for Kindle browser
             'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
             'Pragma': 'no-cache',
             'Expires': '0',
@@ -424,11 +434,12 @@ def get_uv_chart():
 # New path-based cache-busting route
 @app.route('/uv/chart/<ts>', methods=['GET'])
 def get_uv_chart_with_ts(ts: str):
-    """Return the UV chart with a timestamp in the path to defeat aggressive caches."""
+    """Return the UV chart with a timestamp in the path to defeat aggressive caches.
+    Defaults the date to today in Australia/Sydney timezone when not provided.
+    """
     try:
-        date_str = request.args.get('date') or datetime.now().strftime('%Y-%m-%d')
+        date_str = request.args.get('date') or today_au_date_str()
         try:
-            # Validate date format
             datetime.strptime(date_str, '%Y-%m-%d')
         except ValueError:
             return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD.'}), 400

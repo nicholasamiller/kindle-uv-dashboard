@@ -210,7 +210,7 @@ def index():
             justify-content: center;
             align-items: center;
             font-family: Arial, sans-serif;
-            font-size: 3rem;
+            font-size: 2rem;
             font-weight: bold;
             background-color: white;
             color: black;
@@ -232,7 +232,7 @@ def index():
         }
 
         #indexValue {
-            width: 100%;
+            width: 95%;
             font-size: 12vw; /* scale with viewport width for maximum visibility */
             font-weight: bold;
             line-height: 1.0;

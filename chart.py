@@ -155,9 +155,9 @@ def plot_bw_chart(times: List[dt.datetime], measured: List[Optional[float]], for
     ax.set_xlim(start_dt, end_dt)
     ax.set_ylim(0, 16)
 
-    # Time ticks every two hours, formatted HH:MM
+    # Time ticks every two hours, formatted HH
     ax.xaxis.set_major_locator(mdates.HourLocator(interval=2))
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%H"))
     # Minor ticks every 1 hour for readability without label clutter
     ax.xaxis.set_minor_locator(mdates.HourLocator(interval=1))
 
@@ -167,9 +167,14 @@ def plot_bw_chart(times: List[dt.datetime], measured: List[Optional[float]], for
     for lbl in ax.get_xticklabels() + ax.get_yticklabels():
         lbl.set_fontweight('bold')
         lbl.set_color('black')
+    # Ensure X labels are centered on tick marks
+    for lbl in ax.get_xticklabels():
+        lbl.set_horizontalalignment('center')
 
-    fig.autofmt_xdate(rotation=0)
-    plt.tight_layout()
+    # Do not auto-format (can right-align labels); manage spacing via margins
+    # fig.autofmt_xdate(rotation=0)
+    # Explicit margins to avoid truncation of Y-axis labels
+    fig.subplots_adjust(left=0.12, right=0.98, bottom=0.12, top=0.98)
 
     # Render to in-memory buffer, convert to grayscale, and save as JPEG
     buf = BytesIO()
@@ -223,7 +228,7 @@ def generate_chart_bytes(date_str: str,
 
     # No labels/title/grid/legend
     ax.xaxis.set_major_locator(mdates.HourLocator(interval=2))
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%H"))
     ax.xaxis.set_minor_locator(mdates.HourLocator(interval=1))
 
     # Make tick marks thicker/longer and labels larger & bold
@@ -232,9 +237,14 @@ def generate_chart_bytes(date_str: str,
     for lbl in ax.get_xticklabels() + ax.get_yticklabels():
         lbl.set_fontweight('bold')
         lbl.set_color('black')
+    # Ensure X labels are centered on tick marks
+    for lbl in ax.get_xticklabels():
+        lbl.set_horizontalalignment('center')
 
-    fig.autofmt_xdate(rotation=0)
-    plt.tight_layout()
+    # Do not auto-format (can right-align labels); manage spacing via margins
+    # fig.autofmt_xdate(rotation=0)
+    # Explicit margins to avoid truncation of Y-axis labels
+    fig.subplots_adjust(left=0.18, right=0.98, bottom=0.12, top=0.98)
 
     out = BytesIO()
     tmp = BytesIO()

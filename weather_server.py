@@ -7,9 +7,10 @@ try:
     from sunspec2.modbus.client import SunSpecModbusClientDeviceTCP
 except Exception:
     SunSpecModbusClientDeviceTCP = None
-from datetime import datetime
+from datetime import datetime, time as dt_time
 import time  # for cache-busting timestamp
 from zoneinfo import ZoneInfo  # timezone for AEDT/AEST
+import os  # plan selection via env var
 
 # Import chart generator for UV image API
 from chart import generate_chart_bytes, DEFAULT_LON as UV_DEFAULT_LON, DEFAULT_LAT as UV_DEFAULT_LAT
@@ -19,6 +20,138 @@ CORS(app)  # Enable CORS for all routes
 
 # Australia/Sydney timezone (handles AEST/AEDT automatically)
 AUS_TZ = ZoneInfo("Australia/Sydney")
+
+# --- Electricity Tariffs Spec & Helpers ---
+
+def get_electricity_tariff_spec():
+    """Default electricity plan: same rates every day per interval (rates_by_day identical on all days)."""
+    ALL_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+    def same_rate_map(rate: float) -> dict:
+        return {d: float(rate) for d in ALL_DAYS}
+
+    return {
+        "name": "default",
+        "timezone": "Australia/Sydney",
+        "currency": "AUD",
+        "unit": "kWh",
+        "feed_in_tariff": 0.065,  # $/kWh credit when exporting
+        "intervals": [
+            # Peak (all days same by default)
+            {"name": "peak", "start": "07:00", "end": "09:00", "rates_by_day": same_rate_map(0.3900)},
+            {"name": "peak", "start": "17:00", "end": "21:00", "rates_by_day": same_rate_map(0.3900)},
+            # Off-peak (all days)
+            {"name": "off_peak", "start": "11:00", "end": "15:00", "rates_by_day": same_rate_map(0.1540)},
+            # Shoulder (rest of day)
+            {"name": "shoulder", "start": "00:00", "end": "07:00", "rates_by_day": same_rate_map(0.2756)},
+            {"name": "shoulder", "start": "09:00", "end": "11:00", "rates_by_day": same_rate_map(0.2756)},
+            {"name": "shoulder", "start": "15:00", "end": "17:00", "rates_by_day": same_rate_map(0.2756)},
+            {"name": "shoulder", "start": "21:00", "end": "24:00", "rates_by_day": same_rate_map(0.2756)},
+        ],
+    }
+
+
+def get_electricity_tariff_spec_plan2():
+    """Alternate electricity plan (plan2) with weekday/weekend differences.
+    Spec from user:
+    - Weekdays: Peak 06:00–23:59 (end-exclusive -> 24:00) at $0.3019/kWh
+    - Weekends: Peak 06:00–11:59 and 14:00–23:59 at $0.3019/kWh; Shoulder 12:00–13:59 at $0.00/kWh
+    - All week: Off-peak 00:00–05:59 at $0.12/kWh
+    """
+    WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"]
+    WEEKENDS = ["Sat", "Sun"]
+
+    def map_days(days, rate: float):
+        return {d: float(rate) for d in days}
+
+    # Build intervals; ensure more-specific weekend shoulder is listed before wide peak windows for weekends
+    return {
+        "name": "plan2",
+        "timezone": "Australia/Sydney",
+        "currency": "AUD",
+        "unit": "kWh",
+        "feed_in_tariff": 0.05,
+        "intervals": [
+            # Off-peak all week: 00:00–06:00
+            {"name": "off_peak", "start": "00:00", "end": "06:00", "rates_by_day": {**map_days(WEEKDAYS, 0.12), **map_days(WEEKENDS, 0.12)}},
+            # Weekend shoulder free 12:00–14:00 (only Sat/Sun)
+            {"name": "shoulder", "start": "12:00", "end": "14:00", "rates_by_day": map_days(WEEKENDS, 0.00)},
+            # Weekend peak 06:00–12:00
+            {"name": "peak", "start": "06:00", "end": "12:00", "rates_by_day": map_days(WEEKENDS, 0.3019)},
+            # Weekend peak 14:00–24:00
+            {"name": "peak", "start": "14:00", "end": "24:00", "rates_by_day": map_days(WEEKENDS, 0.3019)},
+            # Weekday peak 06:00–24:00
+            {"name": "peak", "start": "06:00", "end": "24:00", "rates_by_day": map_days(WEEKDAYS, 0.3019)},
+        ],
+    }
+
+
+def select_tariff_spec(plan: str | None):
+    """Return a tariff spec by plan key. Supported: 'default' (None), 'plan2'."""
+    key = (plan or "default").lower()
+    if key in ("plan2", "alt", "b"):
+        return get_electricity_tariff_spec_plan2()
+    return get_electricity_tariff_spec()
+
+
+def get_active_tariff_spec() -> dict:
+    """Return the active tariff spec based on env var POWER_PLAN (default: 'plan2')."""
+    plan = os.environ.get('POWER_PLAN', 'plan2')
+    return select_tariff_spec(plan)
+
+def _parse_hhmm(s: str) -> dt_time:
+    h, m = s.split(":")
+    return dt_time(int(h), int(m))
+
+
+def _hhmm_to_minutes(hhmm: str) -> int:
+    h, m = hhmm.split(":")
+    return int(h) * 60 + int(m)
+
+
+def _time_to_minutes(local_dt: datetime) -> int:
+    t = local_dt.timetz()
+    return t.hour * 60 + t.minute
+
+
+def _is_local_time_in_interval(local_dt: datetime, start_hhmm: str, end_hhmm: str) -> bool:
+    """Return True if local_dt's time is within [start, end) in local day.
+    Supports end at 24:00 and intervals that wrap midnight using minute-of-day math.
+    """
+    now_m = _time_to_minutes(local_dt)
+    start_m = _hhmm_to_minutes(start_hhmm)
+    end_m = 24 * 60 if end_hhmm == "24:00" else _hhmm_to_minutes(end_hhmm)
+
+    if start_m <= end_m:
+        return start_m <= now_m < end_m
+    # Wrapped interval (e.g., 22:00-06:00)
+    return now_m >= start_m or now_m < end_m
+
+
+def _dow_abbrev(local_dt: datetime) -> str:
+    return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][local_dt.weekday()]
+
+
+def get_applicable_tariff(now_local: datetime | None = None, spec: dict | None = None):
+    """Return the applicable interval dict and rate for the given local time and plan spec.
+    If now_local is None, uses current time in Australia/Sydney.
+    Returns a tuple: (interval_dict, rate_per_kwh). If no interval matches, returns (None, None).
+    Chooses the rate by current weekday using interval['rates_by_day'] when present,
+    with fallback to interval['rate_per_kwh']."""
+    if now_local is None:
+        now_local = datetime.now(AUS_TZ)
+    if spec is None:
+        spec = get_active_tariff_spec()
+    dow = _dow_abbrev(now_local)
+    for interval in spec["intervals"]:
+        if _is_local_time_in_interval(now_local, interval["start"], interval["end"]):
+            rates_map = interval.get("rates_by_day") or {}
+            if dow in rates_map:
+                return interval, float(rates_map[dow])
+            if "rate_per_kwh" in interval:
+                return interval, float(interval["rate_per_kwh"])
+    return None, None
+
 
 def today_au_date_str() -> str:
     """Return today's date string (YYYY-MM-DD) in Australia/Sydney timezone (AEDT/AEST)."""
@@ -117,9 +250,12 @@ def index():
     # Fetch weather data
     weather = get_weather_data()
 
+    # Use active plan from env
+    spec = get_active_tariff_spec()
+
     # Fetch solar data
     site_power_watts = get_solar_data()
-    cost_per_hour = calculate_power_cost(site_power_watts)
+    cost_per_hour = calculate_power_cost(site_power_watts, spec=spec)
 
     # Determine UV message (no longer displayed)
     uv_message = ""
@@ -467,42 +603,53 @@ def get_uv_chart_with_ts(ts: str):
         print(f"Error generating UV chart (ts route): {e}")
         return jsonify({'error': 'Failed to generate chart'}), 500
 
-def calculate_power_cost(site_power_watts):
-    """Calculates the current cost of power per hour based on site power and time."""
+def calculate_power_cost(site_power_watts, now_local: datetime | None = None, spec: dict | None = None):
+    """Calculates the current cost of power per hour based on site power and local time.
+
+    - site_power_watts: instantaneous site power (W); positive means export, negative import.
+    - now_local: optional timezone-aware datetime in Australia/Sydney; defaults to current.
+    - spec: optional tariff specification dict; defaults to active plan from env.
+
+    Returns: float cost in AUD per hour (negative = credit), rounded to 2 decimals; or None.
+    """
     if site_power_watts is None:
         return None
 
-    now = datetime.now()
-    hour = now.hour
+    if now_local is None:
+        now_local = datetime.now(AUS_TZ)
 
-    # Tariffs in $/kWh
-    feed_in_tariff = 0.065
-    peak_tariff = 0.3900
-    off_peak_tariff = 15.40 / 100 # 15.40c
-    shoulder_tariff = 27.56 / 100 # 27.56c
+    if spec is None:
+        spec = get_active_tariff_spec()
 
     # Convert site power from W to kW
-    site_power_kw = site_power_watts / 1000.0
+    site_power_kw = float(site_power_watts) / 1000.0
 
-    # When site power is positive, we are exporting (credit)
+    # Load tariff spec and figure applicable rate
+    feed_in_tariff = float(spec.get("feed_in_tariff", 0.0))
+    interval, rate = get_applicable_tariff(now_local, spec=spec)
+
+    # Exporting (credit)
     if site_power_kw > 0:
-        # Return as a negative cost (credit)
-        return round(- (site_power_kw * feed_in_tariff), 2)
+        return round(-(site_power_kw * feed_in_tariff), 2)
 
-    # When site power is negative, we are importing (cost)
-    # Use absolute power for cost calculation
+    # Importing (cost)
     power_usage_kw = abs(site_power_kw)
-
-    # Determine the correct tariff based on the time of day
-    # Peak time: 7am-9am (7-8) and 5pm-9pm (17-20)
-    if (7 <= hour < 9) or (17 <= hour < 21):
-        return round(power_usage_kw * peak_tariff, 2)
-    # Off-peak time: 11am-3pm (11-14)
-    elif 11 <= hour < 15:
-        return round(power_usage_kw * off_peak_tariff, 2)
-    # Shoulder time (all other times)
-    else:
-        return round(power_usage_kw * shoulder_tariff, 2)
+    # Fallback to a reasonable rate if interval detection failed
+    if rate is None:
+        dow = _dow_abbrev(now_local)
+        # Try to find a shoulder interval and use its day's rate
+        shoulder = next((i for i in spec["intervals"] if i.get("name") == "shoulder"), None)
+        if shoulder:
+            rates_map = shoulder.get("rates_by_day") or {}
+            if dow in rates_map:
+                rate = float(rates_map[dow])
+            elif rates_map:
+                rate = float(next(iter(rates_map.values())))
+        if rate is None and spec.get("intervals"):
+            first = spec["intervals"][0]
+            rates_map = first.get("rates_by_day") or {}
+            rate = float(next(iter(rates_map.values()))) if rates_map else float(first.get("rate_per_kwh", 0.0))
+    return round(power_usage_kw * rate, 2)
 
 def get_solar_data():
     """Fetch solar inverter data"""
@@ -547,15 +694,43 @@ def get_power_cost():
     if site_power is None:
         return jsonify({'error': 'Could not fetch site power'}), 500
 
-    cost_per_hour = calculate_power_cost(site_power)
+    # Use active plan from env
+    spec = get_active_tariff_spec()
+
+    cost_per_hour = calculate_power_cost(site_power, spec=spec)
 
     if cost_per_hour is None:
         return jsonify({'error': 'Could not calculate power cost'}), 500
 
+    interval, rate = get_applicable_tariff(spec=spec)
+
     return jsonify({
+        'plan': spec.get('name'),
         'site_power_watts': site_power,
-        'cost_per_hour': cost_per_hour
+        'cost_per_hour': cost_per_hour,
+        'applicable_interval': interval,
+        'rate_per_kwh': rate
     })
+
+@app.route('/power/tariffs', methods=['GET'])
+def get_tariffs():
+    """API endpoint to return the current electricity tariff spec."""
+    try:
+        # Use active plan from env
+        spec = get_active_tariff_spec()
+        # Also include which interval applies right now
+        interval, rate = get_applicable_tariff(spec=spec)
+        return jsonify({
+            "spec": spec,
+            "now": datetime.now(AUS_TZ).isoformat(),
+            "applicable": {
+                "interval": interval,
+                "rate_per_kwh": rate
+            }
+        })
+    except Exception as e:
+        print(f"Error in /power/tariffs: {e}")
+        return jsonify({"error": "Failed to get tariff spec"}), 500
 
 if __name__ == '__main__':
     # Run on all interfaces so it's accessible from your network
